@@ -1,0 +1,14 @@
+{
+  "description": "Rustorka.com",
+  "author": "Wain",
+  "homepage": "http://github.com/Wain-PC",
+  "title": "Rustorka.com",
+  "synopsis": "Rustorka.com",
+  "version": "0.1",
+  "file": "rustorka.js",
+  "showtimeVersion": "4.9.389",
+  "type": "ecmascript",
+  "icon": "logo.png",
+  "id": "rustorka",
+  "category": "video"
+}
