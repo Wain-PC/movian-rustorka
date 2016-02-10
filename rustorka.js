@@ -137,7 +137,7 @@
         function subforumLoader() {
             var response, dom, nextURL, textContent,
                 html = require('showtime/html');
-            if(!tryToSearch) {
+            if (!tryToSearch) {
                 return tryToSearch = false;
             }
             page.loading = true;
@@ -224,7 +224,7 @@
             var dom, nextURL, textContent,
                 postBodies, i, length, commentText,
                 html = require('showtime/html');
-            if(!tryToSearch) {
+            if (!tryToSearch) {
                 return false;
             }
             page.loading = true;
@@ -242,16 +242,16 @@
             postBodies = dom.root.getElementByClassName('post_body');
 
             //if we're on the first page, first post must be parsed separately
-            if(pageNum === 1) {
+            if (pageNum === 1) {
                 page.appendItem("", "separator", {
                     title: "Torrent"
                 });
-                if(postBodies && postBodies.length) {
+                if (postBodies && postBodies.length) {
                     postBody = postBodies[0];
                 }
-                if(postBody) {
+                if (postBody) {
                     postImage = postBody.getElementByClassName('postImg postImgAligned img-right');
-                    if(postImage) {
+                    if (postImage) {
                         postImage = postImage[0] && postImage[0].attributes.getNamedItem('title').value;
                     }
                     postBody = postBody.textContent || "";
@@ -274,17 +274,17 @@
                         description: new showtime.RichText(postBody)
                     });
                 }
-                i=1;
+                i = 1;
                 page.appendItem("", "separator", {
                     title: "Комментарии"
                 });
             }
             else {
-                i=0;
+                i = 0;
             }
             length = postBodies.length;
-            for (i;i<length;i++) {
-                if(postBodies[i].textContent) {
+            for (i; i < length; i++) {
+                if (postBodies[i].textContent) {
                     commentText = postBodies[i].textContent + "";
                     page.appendPassiveItem("video", null, {
                         title: commentText,
@@ -317,7 +317,7 @@
 
     //subforums
     plugin.addURI(config.prefix + ":login:(.*)", function (page, showAuth) {
-        page.redirect(config.prefix + ":login:" + showAuth + ':null');
+        page.redirect(config.prefix + ":login:" + showAuth + ':null' + ':null');
 
     });
 
@@ -342,6 +342,7 @@
                     postdata: {
                         'login_username': credentials.username,
                         'login_password': credentials.password,
+                        'autologin': 1,
                         'login': encodeURIComponent('Вход')
                     },
                     noFollow: true,
@@ -371,7 +372,7 @@
 
         //AUTH END
         if (redirectTopicId !== 'null') {
-            page.redirect(config.prefix + ":topic:" + redirectTopicId + ':' + encodeURIComponent(":Производится вход"));
+            page.redirect(config.prefix + ":topic:" + redirectTopicId + ':' + redirectTopicTitle);
         }
         else page.redirect(config.prefix + ':start');
 
@@ -459,6 +460,7 @@
                 postdata: {
                     'login_username': credentials.username,
                     'login_password': credentials.password,
+                    'autologin': 1,
                     'login': encodeURIComponent('Вход')
                 },
                 noFollow: true,
@@ -480,16 +482,16 @@
         var url = config.urls.base + "tracker.php",
             nextURL, tryToSearch = true,
         //1-номер темы, 2-название, 3-размер, 4 - сидеры, 5 - личеры
-            infoRe = /<a class="genmed"  href="\.\/viewtopic\.php\?t=(\d{1,10})">(.*?)<\/a>[\W\w.]*?<\/u>([\W\w.]*?)<\/td>[\W\w.]*?title="Seeders"><b>(\d{1,10})<\/b>[\W\w.]*?title="Leechers"><b>(\d{1,10})<\/b>/gm;
+            infoRe = /<a class="genmed"  href="\.\/viewtopic\.php\?t=(\d{1,10})">(.*?)<\/a>[\W\w.]*?<\/u>([\W\w.]*?)<\/td>[\W\w.]*?title="Seeders"><b>(\d{1,10})<\/b>[\W\w.]*?title="Leechers"><b>(\d{1,10})<\/b>/gm,
+            html = require('showtime/html');
 
         page.entries = 0;
         loader();
         page.paginator = loader;
 
         function loader() {
-            var response, match, dom, textContent,
-                html = require('showtime/html');
-            if(!tryToSearch) {
+            var response, match, dom, textContent;
+            if (!tryToSearch) {
                 return false;
             }
             page.loading = true;
@@ -509,9 +511,10 @@
 
             page.loading = false;
             //perform background login if login form has been found on the page
-            if(response.match(/<div class="logintext">/)) {
-                if(!performLogin()) {
+            if (response.match(/<div class="logintext">/)) {
+                if (!performLogin()) {
                     //do not perform the search if the background login has failed
+                    showtime.print("Search failed because of login!");
                     return tryToSearch = false;
                 }
             }
@@ -527,8 +530,7 @@
                 match = makeDescription(response);
             }
             try {
-                //TODO: this is currently broken. Fix ASAP.
-                nextURL = dom.root.getElementByClassName('bottom_info')[0].getElementByClassName('nav')[0].getElementsByTagName('a');
+                nextURL = dom.root.getElementByClassName('bottom_info')[0].getElementByClassName('nav')[0].getElementByTagName('a');
                 nextURL = nextURL[nextURL.length - 1];
                 textContent = nextURL.textContent;
                 nextURL = nextURL.attributes.getNamedItem('href').value;
@@ -557,7 +559,10 @@
                 },
                 nameMatch = infoRe.exec(response);
             if (nameMatch) {
-                result.title = nameMatch[2].substr(0,100);
+                result.title = html.parse('<div id="title">' + nameMatch[2] + '</div>')
+                    .root
+                    .getElementById('title')
+                    .textContent;
                 result.topicId = nameMatch[1];
                 result.size = nameMatch[3];
                 result.seeders = nameMatch[4];
