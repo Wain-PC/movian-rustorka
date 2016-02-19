@@ -47,8 +47,7 @@
             captcha: /<div><img src="(.*?)"[.\w\W]*?<input type="hidden" name="cap_sid" value="(.*?)">[.\w\W]*?<input type="text" name="(.*?)"/g,
             authFail: /<h4 class="warnColor1 tCenter mrg_16">/,
             search: {
-                info: /<a class="small tr-dl dl-stub" href=".*?">(.*) &#8595;<\/a>[\W\w.]*?<b class="seedmed">(\d{0,10})<\/b>[\W\w.]*?title="Личи"><b>(\d{0,10})<\/b>/gm,
-                name: /<a data-topic_id="(\d{0,10})".*?href="(.*)">(.*)<\/a>/g
+                info: /<a class="genmed"  href="\.\/viewtopic\.php\?t=(\d{1,10})">(.*?)<\/a>[\W\w.]*?<\/u>([\W\w.]*?)<\/td>[\W\w.]*?title="Seeders"><b>(\d{1,10})<\/b>[\W\w.]*?title="Leechers"><b>(\d{1,10})<\/b>/gm
             }
         },
         login: {
@@ -61,6 +60,7 @@
 
     var service = plugin.createService(config.pluginInfo.title, config.prefix + ":start", "video", true, config.logo);
     var settings = plugin.createSettings(config.pluginInfo.title, config.logo, config.pluginInfo.synopsis);
+    var html = require('showtime/html');
     settings.createInfo("info", config.logo, "Plugin developed by " + config.pluginInfo.author + ". \n");
     settings.createDivider('Settings');
     settings.createString("domain", "Домен", "rustorka.com", function (v) {
@@ -77,7 +77,7 @@
         parts: {
             index: 'index.php',
             topic: 'viewtopic.php?t=',
-            search: 'tracker.php?nm=',
+            search: 'tracker.php',
             subforum: 'viewforum.php?f='
         }
     };
@@ -162,8 +162,7 @@
         page.paginator = subforumLoader;
 
         function subforumLoader() {
-            var response, dom, nextURL, textContent,
-                html = require('showtime/html');
+            var response, dom, nextURL, textContent;
             if (!tryToSearch) {
                 return tryToSearch = false;
             }
@@ -237,7 +236,6 @@
     //Topic
     plugin.addURI(config.prefix + ":topic:(.*):(.*)", function (page, topicId, topicTitle) {
         var doc,
-            html = require('showtime/html'),
             pageNum = 0,
             tryToSearch = true,
             url = config.urls.base + config.urls.parts.topic + topicId;
@@ -314,8 +312,7 @@
 
         function topicLoader() {
             var dom, nextURL, textContent,
-                postBodies, i, length, commentText,
-                html = require('showtime/html');
+                postBodies, i, length, commentText;
             if (!tryToSearch) {
                 return false;
             }
@@ -535,6 +532,7 @@
                 postdata: {
                     'login_username': credentials.username,
                     'login_password': credentials.password,
+                    'autologin': 1,
                     'login': encodeURIComponent('Вход')
                 },
                 noFollow: true,
@@ -551,9 +549,53 @@
         }
     }
 
+    function unicodetowin1251(str) {
+        var result = '',
+            uniCode = 0,
+            winCode = 0,
+            i;
+        if (str == 0) return 0;
+        for (i = 0; i < str.length; i++) {
+            uniCode = str.charCodeAt(i);
+            if (uniCode == 1105) {
+                winCode = 184;
+            } else if (uniCode == 1025) {
+                winCode = 168;
+            } else if (uniCode > 1039 && uniCode < 1104) {
+                winCode = uniCode - 848;
+            } else {
+                winCode = uniCode;
+            }
+            result += String.fromCharCode(winCode);
+        }
+        return result;
+    }
+
+    function win1251tounicode(str) {
+        var result = '',
+            uniCode = 0,
+            winCode = 0,
+            i;
+        if (str == 0) return 0;
+        for (i = 0; i < str.length; i++) {
+            winCode = str.charCodeAt(i);
+            if (winCode == 184) {
+                uniCode = 1105;
+            } else if (winCode == 168) {
+                uniCode = 1025;
+            } else if (winCode > 191 && winCode < 256) {
+                uniCode = winCode + 848;
+            } else {
+                uniCode = winCode;
+            }
+            result += String.fromCharCode(uniCode);
+        }
+        return result;
+    }
+
 
     plugin.addSearcher(plugin.getDescriptor().id, config.logo, function (page, query) {
-        var url = config.urls.base + config.urls.parts.search + encodeURIComponent(query),
+        var url = config.urls.base + config.urls.parts.search,
             nextURL, tryToSearch = true;
 
         page.entries = 0;
@@ -562,13 +604,14 @@
 
         //this is NOT working yet as intended (seems like finding the next page is broken)
         function loader() {
-            var response, match, dom, textContent,
-                html = require('showtime/html');
+            var response, match, dom, textContent;
             if (!tryToSearch) {
                 return false;
             }
             page.loading = true;
-            response = showtime.httpReq(url).toString();
+            response = showtime.httpReq(url, {
+                postdata: "max=1&to=1&nm="+ encodeURIComponent(query),
+            }).toString();
             dom = html.parse(response);
             page.loading = false;
             //perform background login if login form has been found on the page
@@ -590,7 +633,8 @@
                 match = makeDescription(response);
             }
             try {
-                nextURL = dom.root.getElementByClassName('bottom_info')[0].getElementByClassName('pg');
+                config.regExps.search.info.lastIndex = 0;
+                nextURL = dom.root.getElementByClassName('nav')[1].getElementByTagName('a');
                 nextURL = nextURL[nextURL.length - 1];
                 textContent = nextURL.textContent;
                 nextURL = nextURL.attributes.getNamedItem('href').value;
@@ -612,29 +656,24 @@
         function makeDescription(response) {
             var result = {
                     title: "",
-                    href: "",
                     topicId: "",
                     size: "0",
                     seeders: "0",
                     leechers: "0"
                 },
-            //1-номер темы, 2-относительная ссылка на тему, 3-название
-                nameMatch = config.regExps.search.name.exec(response),
-            //1-размер, 2-сидеры, 3-личеры
-                infoMatch = config.regExps.search.info.exec(response);
-
+                nameMatch = config.regExps.search.info.exec(response);
             if (nameMatch) {
-                result.title = nameMatch[3];
-                result.href = nameMatch[2];
+                result.title = html.parse('<div id="title">' + nameMatch[2] + '</div>')
+                    .root
+                    .getElementById('title')
+                    .textContent;
                 result.topicId = nameMatch[1];
-            }
-            if (infoMatch) {
-                result.size = infoMatch[1];
-                result.seeders = infoMatch[2];
-                result.leechers = infoMatch[3];
+                result.size = nameMatch[3];
+                result.seeders = nameMatch[4];
+                result.leechers = nameMatch[5];
             }
             //сформируем готовую строку с описанием торрента
-            result.description = coloredStr('Название: ', config.colors.orange) + result.title + "<br>";
+            result.description = coloredStr('Название: ', config.colors.orange) + result.title.replace('"', "'") + "<br>";
             result.description += coloredStr('Размер: ', config.colors.blue) + result.size + "<br>";
             result.description += coloredStr('Сидеры: ', config.colors.green) + result.seeders + "<br>";
             result.description += coloredStr('Личеры: ', config.colors.red) + result.leechers + "<br>";
