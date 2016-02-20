@@ -549,48 +549,25 @@
         }
     }
 
-    function unicodetowin1251(str) {
-        var result = '',
-            uniCode = 0,
-            winCode = 0,
-            i;
-        if (str == 0) return 0;
-        for (i = 0; i < str.length; i++) {
-            uniCode = str.charCodeAt(i);
-            if (uniCode == 1105) {
-                winCode = 184;
-            } else if (uniCode == 1025) {
-                winCode = 168;
-            } else if (uniCode > 1039 && uniCode < 1104) {
-                winCode = uniCode - 848;
-            } else {
-                winCode = uniCode;
-            }
-            result += String.fromCharCode(winCode);
-        }
-        return result;
-    }
 
-    function win1251tounicode(str) {
-        var result = '',
-            uniCode = 0,
-            winCode = 0,
-            i;
-        if (str == 0) return 0;
-        for (i = 0; i < str.length; i++) {
-            winCode = str.charCodeAt(i);
-            if (winCode == 184) {
-                uniCode = 1105;
-            } else if (winCode == 168) {
-                uniCode = 1025;
-            } else if (winCode > 191 && winCode < 256) {
-                uniCode = winCode + 848;
+    function utf8_to_cp1251_urlencode(aa) {
+        var bb = '', c = 0;
+        for (var i = 0; i < aa.length; i++) {
+            c = aa.charCodeAt(i);
+            if (c > 127) {
+                if (c > 1024) {
+                    if (c == 1025) {
+                        c = 1016;
+                    } else if (c == 1105) {
+                        c = 1032;
+                    }
+                    bb += '%' + (c - 848).toString(16);
+                }
             } else {
-                uniCode = winCode;
+                bb += aa[i];
             }
-            result += String.fromCharCode(uniCode);
         }
-        return result;
+        return bb;
     }
 
 
@@ -610,8 +587,14 @@
             }
             page.loading = true;
             response = showtime.httpReq(url, {
-                postdata: "max=1&to=1&nm="+ encodeURIComponent(query),
-            }).toString();
+                debug: true,
+                method: 'POST',
+                postdata: "max=1&to=1&nm=" + utf8_to_cp1251_urlencode(query),
+                headers: {
+                    "content-type": 'application/x-www-form-urlencoded'
+                }
+
+            }).convertFromEncoding('windows-1251').toString();
             dom = html.parse(response);
             page.loading = false;
             //perform background login if login form has been found on the page
